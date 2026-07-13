@@ -60,6 +60,7 @@ type deviceService struct {
 	driver             interfaces.ProtocolDriver
 	extdriver          interfaces.ExtendedProtocolDriver
 	autoEventManager   interfaces.AutoEventManager
+	autoEventScheduler interfaces.AutoEventScheduler
 	commonController   *controller.CommonController
 	controller         *restController.RestController
 	asyncCh            chan *sdkModels.AsyncValues
@@ -99,6 +100,13 @@ func NewDeviceService(serviceKey string, serviceVersion string, driver interface
 
 	service.config = &config.ConfigurationStruct{}
 	return interfaces.DeviceServiceSDK(&service), nil
+}
+
+func (s *deviceService) SetAutoEventScheduler(scheduler interfaces.AutoEventScheduler) {
+	s.autoEventScheduler = scheduler
+	if setter, ok := s.autoEventManager.(interfaces.AutoEventSchedulerSetter); ok {
+		setter.SetAutoEventScheduler(scheduler)
+	}
 }
 
 func (s *deviceService) Run() error {

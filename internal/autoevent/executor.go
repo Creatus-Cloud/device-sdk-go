@@ -50,7 +50,6 @@ func (e *Executor) Run(ctx context.Context, wg *sync.WaitGroup, buffer chan bool
 
 	lc := bootstrapContainer.LoggingClientFrom(dic.Get)
 	deadline := time.Now().Add(e.duration)
-	config := container.ConfigurationFrom(dic.Get)
 
 	for {
 		select {
@@ -62,54 +61,70 @@ func (e *Executor) Run(ctx context.Context, wg *sync.WaitGroup, buffer chan bool
 			}
 			deadline = deadline.Add(e.duration)
 			lc.Debugf("AutoEvent - reading %s", e.sourceName)
-			evt, err := readResource(e, dic)
+			err := e.Execute(ctx, buffer, dic)
 			if err != nil {
-				lc.Errorf("AutoEvent - error occurs when reading resource %s: %v", e.sourceName, err)
-				continue
-			}
-
-			if evt != nil {
-				if e.onChange {
-					if e.compareReadings(evt.Readings) {
-						lc.Debugf("AutoEvent - source '%s' readings are the same as previous one", e.sourceName)
-						continue
-					}
-				}
-				// After the auto event executes a read command, it will create a goroutine to send out events.
-				// When the concurrent auto event amount becomes large, core-data might be hard to handle so many HTTP requests at the same time.
-				// The device service will get some network errors like EOF or Connection reset by peer.
-				// By adding a buffer here, the user can use the Service.AsyncBufferSize configuration to control the goroutine for sending events.
-				if err := e.pool.Submit(func() {
-					buffer <- true
-					correlationId := uuid.NewString()
-
-					// Protect e.onChangeReadings with mutex to avoid concurrent access
-					e.mutex.Lock()
-					if e.onChange && config.Device.AutoEvents.SendChangedReadingsOnly && len(e.onChangeReadings) != 0 {
-						// Update the auto event to include only the readings that have changed.
-						evt.Readings = e.onChangeReadings
-					}
-					e.mutex.Unlock()
-
-					sdkCommon.SendEvent(evt, correlationId, dic)
-					lc.Tracef("AutoEvent - Sent new Event/Reading for '%s' source with Correlation Id '%s'", evt.SourceName, correlationId)
-					<-buffer
-				}); err != nil {
-					lc.Errorf("AutoEvent - error occurs when send new event/reading for %s source: %v", e.sourceName, err)
-				}
-			} else {
-				lc.Debugf("AutoEvent - no event generated when reading resource %s", e.sourceName)
+				lc.Errorf("AutoEvent - %v", err)
 			}
 		}
 	}
 }
 
-func readResource(e *Executor, dic *di.Container) (event *dtos.Event, err errors.EdgeX) {
+func (e *Executor) Execute(ctx context.Context, buffer chan bool, dic *di.Container) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	lc := bootstrapContainer.LoggingClientFrom(dic.Get)
+	config := container.ConfigurationFrom(dic.Get)
+	evt, err := readResource(ctx, e, dic)
+	if err != nil {
+		return fmt.Errorf("error occurs when reading resource %s: %w", e.sourceName, err)
+	}
+
+	if evt == nil {
+		lc.Debugf("AutoEvent - no event generated when reading resource %s", e.sourceName)
+		return nil
+	}
+	if e.onChange {
+		if e.compareReadings(evt.Readings) {
+			lc.Debugf("AutoEvent - source '%s' readings are the same as previous one", e.sourceName)
+			return nil
+		}
+	}
+
+	// After the auto event executes a read command, it will create a goroutine to send out events.
+	// When the concurrent auto event amount becomes large, core-data might be hard to handle so many HTTP requests at the same time.
+	// The device service will get some network errors like EOF or Connection reset by peer.
+	// By adding a buffer here, the user can use the Service.AsyncBufferSize configuration to control the goroutine for sending events.
+	if err := e.pool.Submit(func() {
+		buffer <- true
+		correlationId := uuid.NewString()
+
+		// Protect e.onChangeReadings with mutex to avoid concurrent access
+		e.mutex.Lock()
+		if e.onChange && config.Device.AutoEvents.SendChangedReadingsOnly && len(e.onChangeReadings) != 0 {
+			// Update the auto event to include only the readings that have changed.
+			evt.Readings = e.onChangeReadings
+		}
+		e.mutex.Unlock()
+
+		sdkCommon.SendEvent(evt, correlationId, dic)
+		lc.Tracef("AutoEvent - Sent new Event/Reading for '%s' source with Correlation Id '%s'", evt.SourceName, correlationId)
+		<-buffer
+	}); err != nil {
+		return fmt.Errorf("error occurs when send new event/reading for %s source: %w", e.sourceName, err)
+	}
+	return nil
+}
+
+func readResource(ctx context.Context, e *Executor, dic *di.Container) (event *dtos.Event, err errors.EdgeX) {
 	vars := make(map[string]string, 2)
 	vars[common.Name] = e.deviceName
 	vars[common.Command] = e.sourceName
 
-	res, err := application.GetCommand(context.Background(), e.deviceName, e.sourceName, "", true, dic)
+	res, err := application.GetCommand(ctx, e.deviceName, e.sourceName, "", true, dic)
 	if err != nil {
 		return event, err
 	}

@@ -18,10 +18,12 @@ import (
 
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/cache"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/interfaces"
 )
 
 type manager struct {
 	executorMap     map[string][]*Executor
+	scheduler       interfaces.AutoEventScheduler
 	ctx             context.Context
 	wg              *sync.WaitGroup
 	mutex           sync.Mutex
@@ -66,6 +68,23 @@ func (b *Bootstrap) BootstrapHandler(
 
 func (m *manager) StartAutoEvents() {
 	m.mutex.Lock()
+	scheduler := m.scheduler
+	m.mutex.Unlock()
+
+	if scheduler != nil {
+		autoEvents := make([]interfaces.AutoEventContext, 0)
+		for _, d := range cache.Devices().All() {
+			if len(d.ProfileName) == 0 || d.AdminState == models.Locked {
+				// don't run the auto event if the device doesn't define the profile, or it is locked
+				continue
+			}
+			autoEvents = append(autoEvents, m.eventContexts(d)...)
+		}
+		scheduler.StartAutoEvents(m.ctx, m.wg, autoEvents)
+		return
+	}
+
+	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	for _, d := range cache.Devices().All() {
@@ -97,6 +116,27 @@ func (m *manager) triggerExecutors(deviceName string, autoEvents []models.AutoEv
 	return executors
 }
 
+func (m *manager) eventContexts(device models.Device) []interfaces.AutoEventContext {
+	lc := bootstrapContainer.LoggingClientFrom(m.dic.Get)
+	autoEvents := make([]interfaces.AutoEventContext, 0, len(device.AutoEvents))
+	for _, autoEvent := range device.AutoEvents {
+		executor, err := NewExecutor(device.Name, autoEvent, m.pool)
+		if err != nil {
+			lc.Errorf("failed to create executor of AutoEvent %s for Device %s: %v", autoEvent.SourceName, device.Name, err)
+			// skip this AutoEvent if it causes error during creation
+			continue
+		}
+		autoEvents = append(autoEvents, interfaces.AutoEventContext{
+			Device:    device,
+			AutoEvent: autoEvent,
+			Execute: func(ctx context.Context) error {
+				return executor.Execute(ctx, m.autoeventBuffer, m.dic)
+			},
+		})
+	}
+	return autoEvents
+}
+
 func (m *manager) RestartForDevice(deviceName string) {
 	lc := bootstrapContainer.LoggingClientFrom(m.dic.Get)
 
@@ -112,13 +152,25 @@ func (m *manager) RestartForDevice(deviceName string) {
 	}
 
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	scheduler := m.scheduler
+	if scheduler != nil {
+		m.mutex.Unlock()
+		scheduler.StartAutoEvents(m.ctx, m.wg, m.eventContexts(d))
+		return
+	}
 	executors := m.triggerExecutors(deviceName, d.AutoEvents, m.dic)
 	m.executorMap[deviceName] = executors
+	m.mutex.Unlock()
 }
 
 func (m *manager) StopForDevice(deviceName string) {
 	m.mutex.Lock()
+	scheduler := m.scheduler
+	if scheduler != nil {
+		m.mutex.Unlock()
+		scheduler.StopForDevice(deviceName)
+		return
+	}
 	defer m.mutex.Unlock()
 
 	executors, ok := m.executorMap[deviceName]
@@ -128,4 +180,10 @@ func (m *manager) StopForDevice(deviceName string) {
 		}
 		delete(m.executorMap, deviceName)
 	}
+}
+
+func (m *manager) SetAutoEventScheduler(scheduler interfaces.AutoEventScheduler) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.scheduler = scheduler
 }

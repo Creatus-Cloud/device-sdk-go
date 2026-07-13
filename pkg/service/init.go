@@ -25,6 +25,7 @@ import (
 	restController "github.com/edgexfoundry/device-sdk-go/v4/internal/controller/http"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/controller/messaging"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/provision"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/interfaces"
 	"github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
 
 	"github.com/labstack/echo/v4"
@@ -50,6 +51,11 @@ func (b *Bootstrap) BootstrapHandler(ctx context.Context, wg *sync.WaitGroup, st
 	s.ctx = ctx
 	s.lc = bootstrapContainer.LoggingClientFrom(dic.Get)
 	s.autoEventManager = container.AutoEventManagerFrom(dic.Get)
+	if s.autoEventScheduler != nil {
+		if setter, ok := s.autoEventManager.(interfaces.AutoEventSchedulerSetter); ok {
+			setter.SetAutoEventScheduler(s.autoEventScheduler)
+		}
+	}
 	s.commonController = controller.NewCommonController(dic, b.router, s.serviceKey, sdkCommon.ServiceVersion)
 	s.commonController.SetSDKVersion(sdkCommon.SDKVersion)
 	s.controller = restController.NewRestController(b.router, dic, s.serviceKey)
