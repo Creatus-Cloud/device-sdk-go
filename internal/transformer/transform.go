@@ -14,6 +14,7 @@ import (
 	sdkCommon "github.com/edgexfoundry/device-sdk-go/v4/internal/common"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
 	"github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/transformhook"
 
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/container"
 	"github.com/edgexfoundry/go-mod-bootstrap/v4/di"
@@ -61,7 +62,8 @@ func CommandValuesToEventDTO(cvs []*models.CommandValue, deviceName string, sour
 
 		// perform data transformation
 		if dataTransform && cv.Value != nil {
-			edgexErr := TransformReadResult(cv, dr.Properties)
+			properties := transformhook.ApplyReadProperties(device.ProfileName, cv.DeviceResourceName, dr.Properties)
+			edgexErr := TransformReadResult(cv, properties)
 			if edgexErr != nil {
 				lc.Errorf("failed to transform CommandValue (%s): %v", cv.String(), edgexErr)
 
