@@ -25,6 +25,7 @@ import (
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/transformer"
 	sdkModels "github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/transformhook"
 
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/container"
 	"github.com/edgexfoundry/go-mod-bootstrap/v4/di"
@@ -151,7 +152,8 @@ func readDeviceResource(device models.Device, resourceName string, attributes st
 
 	// convert CommandValue to Event
 	configuration := container.ConfigurationFrom(dic.Get)
-	event, err := transformer.CommandValuesToEventDTO(results, device.Name, dr.Name, configuration.Device.DataTransform, dic)
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
+	event, err := transformer.CommandValuesToEventDTO(results, device.Name, dr.Name, dataTransform, dic)
 	if err != nil {
 		return nil, errors.NewCommonEdgeX(errors.KindServerError, "failed to convert CommandValue to Event", err)
 	}
@@ -210,7 +212,8 @@ func readDeviceResourcesRegex(device models.Device, regexResourceName string, at
 
 	// convert CommandValue to Event
 	configuration := container.ConfigurationFrom(dic.Get)
-	event, err := transformer.CommandValuesToEventDTO(results, device.Name, regexResourceName, configuration.Device.DataTransform, dic)
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
+	event, err := transformer.CommandValuesToEventDTO(results, device.Name, regexResourceName, dataTransform, dic)
 	if err != nil {
 		return nil, errors.NewCommonEdgeX(errors.KindServerError, "failed to convert CommandValue to Event", err)
 	}
@@ -267,7 +270,8 @@ func readDeviceCommand(device models.Device, commandName string, attributes stri
 	}
 
 	// convert CommandValue to Event
-	event, err := transformer.CommandValuesToEventDTO(results, device.Name, dc.Name, configuration.Device.DataTransform, dic)
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
+	event, err := transformer.CommandValuesToEventDTO(results, device.Name, dc.Name, dataTransform, dic)
 	if err != nil {
 		return nil, errors.NewCommonEdgeX(errors.KindServerError, "failed to transform CommandValue to Event", err)
 	}
@@ -318,7 +322,8 @@ func writeDeviceResource(device models.Device, resourceName string, attributes s
 
 	// transform write value
 	configuration := container.ConfigurationFrom(dic.Get)
-	if configuration.Device.DataTransform {
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
+	if dataTransform {
 		edgexErr = transformer.TransformWriteParameter(cv, dr.Properties)
 		if edgexErr != nil {
 			return nil, errors.NewCommonEdgeX(errors.KindContractInvalid, "failed to transform set parameter", edgexErr)
@@ -335,7 +340,7 @@ func writeDeviceResource(device models.Device, resourceName string, attributes s
 
 	// Updated resource value will be published to MessageBus as long as it's not write-only
 	if dr.Properties.ReadWrite != common.ReadWrite_W {
-		return transformer.CommandValuesToEventDTO([]*sdkModels.CommandValue{cv}, device.Name, resourceName, configuration.Device.DataTransform, dic)
+		return transformer.CommandValuesToEventDTO([]*sdkModels.CommandValue{cv}, device.Name, resourceName, dataTransform, dic)
 	}
 
 	return nil, nil
@@ -354,6 +359,7 @@ func writeDeviceCommand(device models.Device, commandName string, attributes str
 	}
 	// check ResourceOperation count does not exceed MaxCmdOps defined in configuration
 	configuration := container.ConfigurationFrom(dic.Get)
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
 	if len(dc.ResourceOperations) > configuration.Device.MaxCmdOps {
 		errMsg := fmt.Sprintf("SET command %s exceed device %s MaxCmdOps (%d)", dc.Name, device.Name, configuration.Device.MaxCmdOps)
 		return nil, errors.NewCommonEdgeX(errors.KindServerError, errMsg, nil)
@@ -419,7 +425,7 @@ func writeDeviceCommand(device models.Device, commandName string, attributes str
 		reqs[i].Type = cv.Type
 
 		// transform write value
-		if configuration.Device.DataTransform {
+		if dataTransform {
 			err := transformer.TransformWriteParameter(cv, dr.Properties)
 			if err != nil {
 				return nil, errors.NewCommonEdgeX(errors.KindContractInvalid, "failed to transform set parameter", err)
@@ -437,7 +443,7 @@ func writeDeviceCommand(device models.Device, commandName string, attributes str
 
 	// Updated resource(s) value will be published to MessageBus as long as they're not write-only
 	if dc.ReadWrite != common.ReadWrite_W {
-		return transformer.CommandValuesToEventDTO(cvs, device.Name, commandName, configuration.Device.DataTransform, dic)
+		return transformer.CommandValuesToEventDTO(cvs, device.Name, commandName, dataTransform, dic)
 	}
 
 	return nil, nil

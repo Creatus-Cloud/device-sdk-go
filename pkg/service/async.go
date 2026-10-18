@@ -24,6 +24,7 @@ import (
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/transformer"
 	sdkModels "github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/transformhook"
 )
 
 // processAsyncResults processes readings that are pushed from
@@ -72,7 +73,8 @@ func (s *deviceService) sendAsyncValues(acv *sdkModels.AsyncValues, working chan
 	}
 
 	configuration := container.ConfigurationFrom(dic.Get)
-	event, err := transformer.CommandValuesToEventDTO(acv.CommandValues, acv.DeviceName, acv.SourceName, configuration.Device.DataTransform, dic)
+	dataTransform := transformhook.ApplyDataTransformOverride(configuration.Device.DataTransform)
+	event, err := transformer.CommandValuesToEventDTO(acv.CommandValues, acv.DeviceName, acv.SourceName, dataTransform, dic)
 	if err != nil {
 		s.lc.Errorf("failed to transform CommandValues to Event: %v", err)
 		return
