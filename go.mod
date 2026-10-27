@@ -2,6 +2,8 @@ module github.com/edgexfoundry/device-sdk-go/v4
 
 go 1.25.0
 
+replace github.com/edgexfoundry/go-mod-core-contracts/v4 => github.com/Creatus-Cloud/go-mod-core-contracts/v4 v4.0.2-creatus.5
+
 require (
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/edgexfoundry/go-mod-bootstrap/v4 v4.1.0-dev.73

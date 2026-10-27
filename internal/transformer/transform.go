@@ -115,6 +115,8 @@ func CommandValuesToEventDTO(cvs []*models.CommandValue, deviceName string, sour
 			reading.Units = dr.Properties.Units
 		}
 		sdkCommon.AddReadingTags(&reading)
+		// Use the same device snapshot for both the reading's ID and name.
+		reading.DeviceID = device.Id
 		readings = append(readings, reading)
 
 		if cv.Type == common.ValueTypeBinary {
