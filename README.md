@@ -12,6 +12,26 @@ Developers can make their own device service by implementing the [`ProtocolDrive
 
 Please see the provided [simple device service](https://github.com/edgexfoundry/device-sdk-go/tree/main/example) as an example, included in this repository.
 
+## Device identity in readings
+
+The Creatus SDK sets the optional `DeviceID` field on each reading generated
+from command values, including asynchronous pushes and command responses.
+JSON and CBOR encode it as `deviceID` beside `deviceName`. Go consumers use
+`reading.DeviceID`; JavaScript consumers use `reading.deviceID`.
+
+The ID comes from the SDK's existing device-cache snapshot, without an
+additional metadata request. Reading IDs, device names, and profile tags keep
+their existing meaning. If the cached device has no ID, `deviceID` is omitted.
+Consumers can retain name lookup for older readings that omit the field.
+
+The native field is provided by the Creatus contracts fork at
+`v4.0.2-creatus.5`. Driver modules must also select this fork, because Go does
+not inherit dependency modules' `replace` directives:
+
+```go
+replace github.com/edgexfoundry/go-mod-core-contracts/v4 => github.com/Creatus-Cloud/go-mod-core-contracts/v4 v4.0.2-creatus.5
+```
+
 ## Command Line Options
 
 The following command line options are available

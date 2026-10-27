@@ -34,6 +34,7 @@ import (
 
 const (
 	TestDevice         = "testDevice"
+	TestDeviceID       = "cd308f0b-8e01-4a24-8e51-d366623e46c0"
 	TestDeviceService  = "testDeviceService"
 	TestProfile        = "testProfile"
 	TestDeviceResource = "testResource"
@@ -64,6 +65,7 @@ func NewMockDIC() *di.Container {
 		BaseWithTotalCountResponse: dtoCommon.BaseWithTotalCountResponse{},
 		Devices: []dtos.Device{
 			{
+				Id:             TestDeviceID,
 				Name:           TestDevice,
 				AdminState:     models.Unlocked,
 				OperatingState: models.Up,
@@ -237,6 +239,7 @@ func TestCommandValuesToEventDTO_ReadingNilValue(t *testing.T) {
 		expectedNullReading := dtos.NewNullReading(TestProfile, TestDevice, TestDeviceResource, r.ValueType)
 		expectedNullReading.Id = r.Id
 		expectedNullReading.Origin = r.Origin
+		expectedNullReading.DeviceID = TestDeviceID
 		assert.Equal(t, expectedNullReading, r)
 	}
 }
