@@ -11,14 +11,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v4/common"
-
-	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/container"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/controller"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/handlers"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/startup"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/di"
-
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/cache"
 	sdkCommon "github.com/edgexfoundry/device-sdk-go/v4/internal/common"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
@@ -27,7 +19,12 @@ import (
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/provision"
 	"github.com/edgexfoundry/device-sdk-go/v4/pkg/interfaces"
 	"github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
-
+	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/container"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/controller"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/handlers"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/startup"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/di"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/common"
 	"github.com/labstack/echo/v4"
 )
 
@@ -60,6 +57,10 @@ func (b *Bootstrap) BootstrapHandler(ctx context.Context, wg *sync.WaitGroup, st
 	s.commonController.SetSDKVersion(sdkCommon.SDKVersion)
 	s.controller = restController.NewRestController(b.router, dic, s.serviceKey)
 	s.controller.InitRestRoutes(dic)
+	if err := s.initializeConfigValidation(); err != nil {
+		s.lc.Error("initialize configuration validation", "error", err)
+		return false
+	}
 
 	if !b.checkDependencyServiceAvailable(common.CoreMetaDataServiceKey, startupTimer) {
 		return false

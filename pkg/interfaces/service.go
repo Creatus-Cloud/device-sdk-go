@@ -131,6 +131,10 @@ type DeviceServiceSDK interface {
 	// as the standard configuration.
 	LoadCustomConfig(customConfig UpdatableConfig, sectionName string) error
 
+	// RegisterCustomConfigValidator registers a read-only validator for one custom section.
+	// Pass the outer config struct used by LoadCustomConfig, containing only sectionName.
+	// The SDK creates a fresh zero-valued candidate for every validation request.
+	RegisterCustomConfigValidator(prototype any, sectionName string, validate func(any) error) error
 	// ListenForCustomConfigChanges uses the Config Processor from go-mod-bootstrap to attempt to listen for
 	// changes to the specified custom configuration section. LoadCustomConfig must be called previously so that
 	// the instance of sdkService.configProcessor has already been set.

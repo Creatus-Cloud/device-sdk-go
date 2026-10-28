@@ -19,12 +19,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/controller"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/handlers"
-	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/startup"
-	"github.com/panjf2000/ants/v2"
-
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/autodiscovery"
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/autoevent"
 	sdkCommon "github.com/edgexfoundry/device-sdk-go/v4/internal/common"
@@ -32,13 +26,17 @@ import (
 	"github.com/edgexfoundry/device-sdk-go/v4/internal/container"
 	restController "github.com/edgexfoundry/device-sdk-go/v4/internal/controller/http"
 	sdkUtils "github.com/edgexfoundry/device-sdk-go/v4/internal/utils"
+	"github.com/edgexfoundry/device-sdk-go/v4/pkg/configvalidation"
 	"github.com/edgexfoundry/device-sdk-go/v4/pkg/interfaces"
 	sdkModels "github.com/edgexfoundry/device-sdk-go/v4/pkg/models"
-
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap"
 	bootstrapConfig "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/config"
 	bootstrapContainer "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/container"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/controller"
 	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/flags"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/handlers"
 	bootstrapInterfaces "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/interfaces"
+	"github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/startup"
 	bootstrapTypes "github.com/edgexfoundry/go-mod-bootstrap/v4/config"
 	"github.com/edgexfoundry/go-mod-bootstrap/v4/di"
 	"github.com/edgexfoundry/go-mod-core-contracts/v4/clients/logger"
@@ -49,11 +47,13 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/v4/models"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/panjf2000/ants/v2"
 )
 
 const EnvInstanceName = "EDGEX_INSTANCE_NAME"
 
 type deviceService struct {
+	configValidation   *configvalidation.Registry
 	serviceKey         string
 	baseServiceName    string
 	lc                 logger.LoggingClient
@@ -281,6 +281,11 @@ func (s *deviceService) LoadCustomConfig(customConfig interfaces.UpdatableConfig
 
 	s.controller.SetCustomConfigInfo(customConfig)
 	s.commonController.SetCustomConfigInfo(customConfig)
+	if s.configValidation != nil {
+		if err := s.configValidation.RequireValidator(customConfig); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

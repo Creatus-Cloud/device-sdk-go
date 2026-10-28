@@ -10,6 +10,42 @@ servers:
 
 components:
   schemas:
+    ConfigValidationRequest:
+      type: object
+      additionalProperties: false
+      required: [serviceID, configuration]
+      properties:
+        serviceID:
+          type: string
+          description: Exact registered ID of the receiving service.
+        configuration:
+          type: object
+          description: Complete service candidate; relative Keeper paths only, with common layers merged.
+          additionalProperties:
+            type: string
+        devices:
+          type: array
+          description: Proposed devices belonging to this device service; application services reject nonempty lists.
+          items:
+            $ref: '#/components/schemas/Device'
+    ConfigValidationResponse:
+      type: object
+      required: [serviceID, valid]
+      properties:
+        serviceID:
+          type: string
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: object
+            required: [path, message]
+            properties:
+              path:
+                type: string
+              message:
+                type: string
     AutoEvent:
       description: "Identifies a resource which will be read automatically by the device service."
       type: object
@@ -416,6 +452,53 @@ components:
         message: "Internal Server Error"
 
 paths:
+  /config/validate:
+    get:
+      operationId: configurationValidationCapabilities
+      summary: List known configuration section names without exposing values.
+      responses:
+        '200':
+          description: Known configuration sections; POST rejects any missing validator.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [serviceID, sections]
+                properties:
+                  serviceID:
+                    type: string
+                  sections:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Authentication required.
+    post:
+      operationId: validateConfiguration
+      summary: Validate an isolated proposed configuration without applying it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValidationRequest'
+      responses:
+        '200':
+          description: Configuration is valid; no changes were applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValidationResponse'
+        '400':
+          description: Malformed validation request.
+        '401':
+          description: Authentication required.
+        '422':
+          description: Configuration was rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValidationResponse'
   /device/name/{name}/{command}:
     get:
       description: Request the device/sensor by its name to return the current (or in some cases new) event/reading values for the command or device resource specified. The device service may have cached the latest event/reading for the sensor(s) or it may immediate request new event/reading values depending on the implementation and the device(s)/sensor(s) capability.
