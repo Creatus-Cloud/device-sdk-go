@@ -18,6 +18,9 @@ func (s *deviceService) initializeConfigValidation() error {
 		if err := configvalidation.ValidateService(c.Service, c.Writable.LogLevel); err != nil {
 			return err
 		}
+		if err := configvalidation.ValidateTelemetry(c.Writable.Telemetry); err != nil {
+			return err
+		}
 		if c.MaxEventSize < 0 {
 			return fmt.Errorf("MaxEventSize must not be negative")
 		}
