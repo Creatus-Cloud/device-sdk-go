@@ -21,6 +21,10 @@ func (s *deviceService) initializeConfigValidation() error {
 		if err := configvalidation.ValidateTelemetry(c.Writable.Telemetry); err != nil {
 			return err
 		}
+		// Autoevents also allocate this buffer when asynchronous readings are disabled.
+		if c.Device.AsyncBufferSize < 0 {
+			return fmt.Errorf("Device.AsyncBufferSize must not be negative")
+		}
 		if c.MaxEventSize < 0 {
 			return fmt.Errorf("MaxEventSize must not be negative")
 		}

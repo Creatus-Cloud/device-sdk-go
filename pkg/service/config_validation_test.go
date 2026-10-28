@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigPreflightTelemetryInterval(t *testing.T) {
+func newPreflightTestService(t *testing.T) *deviceService {
+	t.Helper()
 	t.Setenv("EDGEX_DISABLE_JWT_VALIDATION", "true")
 	dic := di.NewContainer(di.ServiceConstructorMap{
 		bootstrapContainer.LoggingClientInterfaceName: func(di.Get) interface{} { return logger.NewMockClient() },
@@ -24,7 +25,11 @@ func TestConfigPreflightTelemetryInterval(t *testing.T) {
 		controller: restController.NewRestController(echo.New(), dic, "test-service"),
 	}
 	require.NoError(t, sdk.initializeConfigValidation())
+	return &sdk
+}
 
+func TestConfigPreflightTelemetryInterval(t *testing.T) {
+	sdk := newPreflightTestService(t)
 	for _, test := range []struct {
 		name     string
 		interval string
@@ -52,6 +57,37 @@ func TestConfigPreflightTelemetryInterval(t *testing.T) {
 			require.Equal(t, test.valid, result.Valid, "%+v", result.Errors)
 			if !test.valid {
 				require.Contains(t, fmt.Sprint(result.Errors), "Writable.Telemetry.Interval")
+			}
+		})
+	}
+}
+
+func TestConfigPreflightAsyncBufferSize(t *testing.T) {
+	sdk := newPreflightTestService(t)
+	for _, test := range []struct {
+		name, enabled, size string
+		valid               bool
+	}{
+		{"buffered", "true", "16", true},
+		{"unbuffered", "true", "0", true},
+		{"negative", "true", "-1", false},
+		{"disabled buffered", "false", "16", true},
+		{"disabled unbuffered", "false", "0", true},
+		{"disabled negative", "false", "-1", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result := sdk.configValidation.Validate(configvalidation.Request{
+				ServiceID: "test-service",
+				Configuration: map[string]string{
+					"Service/Host": "localhost", "Service/Port": "59701",
+					"Service/RequestTimeout": "5s", "Writable/LogLevel": "INFO",
+					"Device/EnableAsyncReadings": test.enabled,
+					"Device/AsyncBufferSize":     test.size,
+				},
+			})
+			require.Equal(t, test.valid, result.Valid, "%+v", result.Errors)
+			if !test.valid {
+				require.Contains(t, fmt.Sprint(result.Errors), "Device.AsyncBufferSize")
 			}
 		})
 	}
