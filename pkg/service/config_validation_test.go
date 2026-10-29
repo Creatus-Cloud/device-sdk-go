@@ -1,7 +1,10 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	restController "github.com/edgexfoundry/device-sdk-go/v4/internal/controller/http"
@@ -46,7 +49,7 @@ func TestConfigPreflightTelemetryInterval(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := sdk.configValidation.Validate(configvalidation.Request{
 				ServiceID: "test-service",
-				Configuration: map[string]string{
+				Configuration: map[string]any{
 					"Service/Host":                "localhost",
 					"Service/Port":                "59701",
 					"Service/RequestTimeout":      "5s",
@@ -78,7 +81,7 @@ func TestConfigPreflightAsyncBufferSize(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := sdk.configValidation.Validate(configvalidation.Request{
 				ServiceID: "test-service",
-				Configuration: map[string]string{
+				Configuration: map[string]any{
 					"Service/Host": "localhost", "Service/Port": "59701",
 					"Service/RequestTimeout": "5s", "Writable/LogLevel": "INFO",
 					"Device/EnableAsyncReadings": test.enabled,
@@ -90,5 +93,19 @@ func TestConfigPreflightAsyncBufferSize(t *testing.T) {
 				require.Contains(t, fmt.Sprint(result.Errors), "Device.AsyncBufferSize")
 			}
 		})
+	}
+}
+
+func TestInitializedCapabilitiesShareOnlyStandardConfiguration(t *testing.T) {
+	sdk := newPreflightTestService(t)
+	require.NoError(t, sdk.RegisterCustomConfigValidator(&struct{ AppCustom struct{ Limit int } }{}, "AppCustom", func(any) error { return nil }))
+	response := httptest.NewRecorder()
+	sdk.configValidation.ServeHTTP(response, httptest.NewRequest(http.MethodGet, configvalidation.Route, nil))
+	var capabilities configvalidation.Capabilities
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &capabilities))
+	require.Contains(t, capabilities.Sections, "AppCustom")
+	require.NotContains(t, capabilities.SharedSections, "AppCustom")
+	for _, section := range []string{"Service", "Writable", "Device"} {
+		require.Contains(t, capabilities.SharedSections, section)
 	}
 }

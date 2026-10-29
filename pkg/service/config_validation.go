@@ -13,7 +13,7 @@ import (
 
 func (s *deviceService) initializeConfigValidation() error {
 	s.configValidation = configvalidation.New(s.serviceKey)
-	if err := s.configValidation.Register(func() any { return &config.ConfigurationStruct{} }, func(raw any) error {
+	if err := s.configValidation.RegisterStandard(func() any { return &config.ConfigurationStruct{} }, func(raw any) error {
 		c := raw.(*config.ConfigurationStruct)
 		if err := configvalidation.ValidateService(c.Service, c.Writable.LogLevel); err != nil {
 			return err
